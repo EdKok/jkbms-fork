@@ -1,0 +1,595 @@
+[
+    {
+        "id": "591fdc7180ba6486",
+        "type": "subflow",
+        "name": "JK 2 MQTT",
+        "info": "Subflow that reads all parameters from a Jk BMS,\r\nthen parses and publishes them on MQTT",
+        "category": "",
+        "in": [
+            {
+                "x": 40,
+                "y": 400,
+                "wires": [
+                    {
+                        "id": "03de76edefcdbe36"
+                    }
+                ]
+            }
+        ],
+        "out": [
+            {
+                "x": 1040,
+                "y": 800,
+                "wires": [
+                    {
+                        "id": "95038766925ca4c9",
+                        "port": 0
+                    }
+                ]
+            }
+        ],
+        "env": [],
+        "meta": {},
+        "color": "#C0DEED",
+        "status": {
+            "x": 220,
+            "y": 40,
+            "wires": [
+                {
+                    "id": "a2208a3aad154e83",
+                    "port": 0
+                }
+            ]
+        }
+    },
+    {
+        "id": "46d7fe3022c6beb7",
+        "type": "mqtt out",
+        "z": "591fdc7180ba6486",
+        "name": "",
+        "topic": "",
+        "qos": "",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "29584191.2aa8de",
+        "x": 1070,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "03de76edefcdbe36",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "read all",
+        "func": "msg.timeout = 10000;\nmsg.payload = Buffer.from([0x4E, 0x57, 0x00, 0x13, 0x00, 0x00, 0x00, 0x00, 0x06, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x01, 0x29]);\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 160,
+        "y": 400,
+        "wires": [
+            [
+                "887beceea95369ad"
+            ]
+        ]
+    },
+    {
+        "id": "2fb9822ba29279fe",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "parse payload",
+        "func": "// function to calculate checksum\nfunction chksum(buffer, len) {\n  let checksum = 0;\n  let ii;\n  for (ii = 0; ii < len; ii++) {\n    checksum = checksum + buffer[ii];\n  }\n  return checksum;\n}\n\n// function to calculate cells diff\nfunction maxAbsDiff(arr, n) {\n    arr.sort(function (a, b) { return a - b });\n    return arr[n - 1] - arr[0];\n}\n\n// verify the reply from BMS has the right header\nmsg.error = null;\nmsg.buffer = msg.payload;\nif (msg.buffer[0] != 0x4E || msg.buffer[1] != 0x57) {\n    node.warn ('Invalid header');\n    msg.error = \"BMS Error\";\n}\n\n// verify the reply from BMS has the right checksum\nmsg.jkbms = {};\nmsg.jkbms.data_len = msg.buffer[2] << 8 | msg.buffer[3] << 0;\nmsg.jkbms.function = msg.buffer[8];\nmsg.jkbms.computed_crc = chksum(msg.buffer, msg.jkbms.data_len);\n\nmsg.jkbms.bmsreply_crc = msg.buffer[msg.jkbms.data_len] << 8 | msg.buffer[msg.jkbms.data_len + 1] << 0;\n\nif (msg.jkbms.computed_crc != msg.jkbms.bmsreply_crc) {\n    node.warn('JkModbus CRC Check failed!');\n    msg.error = \"BMS Error\";\n}\n\n//cell voltages\nconst cells = [];\nlet cell;\nmsg.jkbms.numberOfCells = msg.buffer[12] / 3;\nmsg.jkbms.cell_voltages = {};\nfor (cell = 1; cell <= msg.jkbms.numberOfCells; cell++) {\n    msg.jkbms.cell_voltages[\"cell\" + cell] = (msg.buffer[12 + cell * 3 - 1] << 8 | msg.buffer[12 + cell * 3] << 0) / 1000;\n    cells[cell-1] = msg.jkbms.cell_voltages[\"cell\" + cell]\n}\n\n// cell diff voltage\nmsg.jkbms.cell_diff = parseFloat(maxAbsDiff(cells, 4).toFixed(3));\n\n// cell min & max\nmsg.jkbms.cell_min = Math.min.apply(Math, cells).toFixed(3);\nmsg.jkbms.cell_max = Math.max.apply(Math, cells).toFixed(3);\n\n//temperatures\nmsg.jkbms.temperatures = {};\nif (msg.buffer[25] != 0x80) {\n    node.warn ('Temperatures marker not correct!');\n    msg.error = \"BMS Error\";\n}\nmsg.jkbms.temperatures.internal = msg.buffer[26] << 8 | msg.buffer[27] << 0;\nif (msg.jkbms.temperatures.internal > 100) {\n    msg.jkbms.temperatures.internal = msg.jkbms.temperatures.internal - 100;\n}\nmsg.jkbms.temperatures.battery1 = msg.buffer[29] << 8 | msg.buffer[30] << 0;\nif (msg.jkbms.temperatures.battery1 > 100) {\n    msg.jkbms.temperatures.battery1 = msg.jkbms.temperatures.battery1 - 100;\n}\nmsg.jkbms.temperatures.battery2 = msg.buffer[32] << 8 | msg.buffer[33] << 0;\nif (msg.jkbms.temperatures.battery2 > 100) {\n    msg.jkbms.temperatures.battery2 = msg.jkbms.temperatures.battery2 - 100;\n}\n\n//battery voltage\nif (msg.buffer[34] != 0x83) {\n    node.warn ('Voltage marker not correct!');\n    msg.error = \"BMS Error\";\n}\nmsg.jkbms.voltage = (msg.buffer[35] << 8 | msg.buffer[36] << 0) / 100;\n\n//battery current\nif (msg.buffer[37] != 0x84) {\n    node.warn ('Current marker not correct!');\n    msg.error = \"BMS Error\";\n}\nmsg.jkbms.current = (msg.buffer[38] << 8 | msg.buffer[39] << 0);\n\nlet currconst = 32768\nif (msg.jkbms.current < currconst)\n    msg.jkbms.current = msg.jkbms.current / -100;\nelse\n    msg.jkbms.current = (msg.jkbms.current - currconst) / 100;\n\n//remainig battery SOC\nif (msg.buffer[40] != 0x85) {\n    node.warn ('Remaining battery SOC marker not correct!');\n    msg.error = \"BMS Error\";\n}\nmsg.jkbms.remainingsoc = msg.buffer[41];\n\n//numberof NTC\nif (msg.buffer[42] != 0x86) {\n    node.warn ('Number of NTC marker not correct!');\n    msg.error = \"BMS Error\";\n}\nmsg.jkbms.ntcnumber = msg.buffer[43];\n\n//numberof battery cycles\nif (msg.buffer[44] != 0x87) {\n    node.warn ('Number of battery cycles marker not correct!');\n    msg.error = \"BMS Error\";\n}\nmsg.jkbms.batterycycles = (msg.buffer[45] << 8 | msg.buffer[46] << 0);\n\n//battery cycle capacity Ah\nif (msg.buffer[47] != 0x89) {\n    node.warn ('Battery cycle capacity Ah marker not correct!');\n    msg.error = \"BMS Error\";\n}\nmsg.jkbms.batterycyclecapacity = (msg.buffer[48] << 24 | msg.buffer[49] << 16 | msg.buffer[50] << 8 | msg.buffer[51] << 0);\n\n//number of cells\nif (msg.buffer[52] != 0x8a) {\n    node.warn ('Number of cells marker not correct!');\n    msg.error = \"BMS Error\";\n}\nmsg.jkbms.cellsnumber = (msg.buffer[53] << 8 | msg.buffer[54] << 0);\n\n// battery capacity setting\nif (msg.buffer[143] != 0xaa) {\n    node.warn('Battery capacity marker not correct!');\n    msg.error = \"BMS Error\";\n}\nmsg.jkbms.batterycapacity = (msg.buffer[144] << 24 | msg.buffer[145] << 16 | msg.buffer[146] << 8 | msg.buffer[147] << 0);\n\n//battery warnings\nmsg.jkbms.warnings = {};\n\nif (msg.buffer[55] != 0x8b) {\n    node.warn ('Battery warnings marker not correct!');\n    msg.error = \"BMS Error\";\n}\nmsg.jkbms.warnings.batteryWarning = (msg.buffer[56] << 8 | msg.buffer[57] << 0);\n\nmsg.jkbms.warnings.lowCapacity = msg.jkbms.warnings.batteryWarning & 1;\nmsg.jkbms.warnings.powerTubeOvertemperature = (msg.jkbms.warnings.batteryWarning & 2) >> 1 ;\nmsg.jkbms.warnings.chargingOvervoltage = (msg.jkbms.warnings.batteryWarning & 4) >> 2;\nmsg.jkbms.warnings.dischargingUndervoltage = (msg.jkbms.warnings.batteryWarning & 8) >> 3;\nmsg.jkbms.warnings.batteryOvertemperature = (msg.jkbms.warnings.batteryWarning & 16) >> 4;\nmsg.jkbms.warnings.chargingOvercurrent = (msg.jkbms.warnings.batteryWarning & 32) >> 5;\nmsg.jkbms.warnings.dischargingOvercurrent = (msg.jkbms.warnings.batteryWarning & 64) >> 6;\nmsg.jkbms.warnings.cellPressureDifference = (msg.jkbms.warnings.batteryWarning & 128) >> 7;\nmsg.jkbms.warnings.overtemperatureBatteryBox = (msg.jkbms.warnings.batteryWarning & 256) >> 8;\nmsg.jkbms.warnings.batteryLowtemperature = (msg.jkbms.warnings.batteryWarning & 512) >> 9;\nmsg.jkbms.warnings.cellOvervoltage = (msg.jkbms.warnings.batteryWarning & 1024) >> 10;\nmsg.jkbms.warnings.cellUndervoltage = (msg.jkbms.warnings.batteryWarning & 2048) >> 11;\nmsg.jkbms.warnings.alarm309_AProtection = (msg.jkbms.warnings.batteryWarning & 4096) >> 12;\nmsg.jkbms.warnings.alarm309_BProtection = (msg.jkbms.warnings.batteryWarning & 8192) >> 13;\n\n//battery status\nmsg.jkbms.status = {};\n\nif (msg.buffer[58] != 0x8c) {\n    node.warn ('Battery warning marker not correct!');\n    msg.error = \"BMS Error\";\n}\nmsg.jkbms.status.batteryStatus = (msg.buffer[59] << 8 | msg.buffer[60] << 0);\n\nmsg.jkbms.status.chargingEnabled = msg.jkbms.status.batteryStatus & 1;\nmsg.jkbms.status.dischargingEnabled = (msg.jkbms.status.batteryStatus & 2) >> 1;\nmsg.jkbms.status.balancingEnabled = (msg.jkbms.status.batteryStatus & 4) >> 2;\nmsg.jkbms.status.emergencyConnect = (msg.jkbms.status.batteryStatus & 8) >> 3;\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 500,
+        "y": 400,
+        "wires": [
+            [
+                "e252dee8a861ac42",
+                "5a367bd069f85206",
+                "4e5a5f7b32b8feb9",
+                "50406e2644efebec",
+                "23e244cf831be7bd",
+                "754c8d35c3f3c1dc",
+                "07041bb49a21f28e",
+                "764fd3ef3a70243e",
+                "39f1f003e035a8e5",
+                "68335d4231525922",
+                "d470ea1a4ceddba0",
+                "301db910d553fb00",
+                "7a973c6c9e290788",
+                "a1c7fa2cf1cd8927",
+                "ce7b15c90ffd4473",
+                "1d72e4574aa6cdaa",
+                "d245f16ba2fc348e",
+                "49ac010eaad56ef2",
+                "6583e00f298898be",
+                "95038766925ca4c9"
+            ]
+        ]
+    },
+    {
+        "id": "887beceea95369ad",
+        "type": "serial request",
+        "z": "591fdc7180ba6486",
+        "name": "JK BMS",
+        "serial": "7c463b9e26f9dcf1",
+        "x": 320,
+        "y": 400,
+        "wires": [
+            [
+                "2fb9822ba29279fe"
+            ]
+        ]
+    },
+    {
+        "id": "a2208a3aad154e83",
+        "type": "status",
+        "z": "591fdc7180ba6486",
+        "name": "",
+        "scope": [
+            "887beceea95369ad"
+        ],
+        "x": 80,
+        "y": 40,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "e252dee8a861ac42",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "cell0",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/cell0\";\nmsg.payload = msg.jkbms.cell_voltages.cell1;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 40,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "5a367bd069f85206",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "cell1",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/cell1\";\nmsg.payload = msg.jkbms.cell_voltages.cell2;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 80,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "4e5a5f7b32b8feb9",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "cell2",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/cell2\";\nmsg.payload = msg.jkbms.cell_voltages.cell3;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 120,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "50406e2644efebec",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "cell3",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/cell3\";\nmsg.payload = msg.jkbms.cell_voltages.cell4;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 160,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "23e244cf831be7bd",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "celldiff",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/celldiff\";\nmsg.payload = msg.jkbms.cell_diff;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 200,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "754c8d35c3f3c1dc",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "cellmax",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/cellmax\";\nmsg.payload = msg.jkbms.cell_max;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 800,
+        "y": 240,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "07041bb49a21f28e",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "cellmin",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/cellmin\";\nmsg.payload = msg.jkbms.cell_min;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 280,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "764fd3ef3a70243e",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "voltage",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/voltage\";\nmsg.payload = msg.jkbms.voltage;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 800,
+        "y": 320,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "39f1f003e035a8e5",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "current",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/current\";\nmsg.payload = msg.jkbms.current;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 800,
+        "y": 360,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "68335d4231525922",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "probes",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/probes\";\nmsg.payload = msg.jkbms.ntcnumber + 1;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 800,
+        "y": 400,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "d470ea1a4ceddba0",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "temp0",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/temp0\";\nmsg.payload = msg.jkbms.temperatures.internal;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 440,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "301db910d553fb00",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "temp1",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/temp1\";\nmsg.payload = msg.jkbms.temperatures.battery1;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 480,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "7a973c6c9e290788",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "temp1",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/temp2\";\nmsg.payload = msg.jkbms.temperatures.battery2;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 520,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "a1c7fa2cf1cd8927",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "cyclecnt",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/cyclecnt\";\nmsg.payload = msg.jkbms.batterycycles;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 800,
+        "y": 560,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "ce7b15c90ffd4473",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "soc",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/perctcap\";\nmsg.payload = msg.jkbms.remainingsoc;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 600,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "1d72e4574aa6cdaa",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "remcapacity",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/remcap\";\nmsg.payload = msg.jkbms.batterycapacity * msg.jkbms.remainingsoc / 100;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 810,
+        "y": 640,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "d245f16ba2fc348e",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "charge led",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/cfet\";\nmsg.payload = msg.jkbms.status.chargingEnabled;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 810,
+        "y": 680,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "49ac010eaad56ef2",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "discharge led",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/dfet\";\nmsg.payload = msg.jkbms.status.dischargingEnabled;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 820,
+        "y": 720,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "6583e00f298898be",
+        "type": "function",
+        "z": "591fdc7180ba6486",
+        "name": "balance led",
+        "func": "msg.topic = \"batteries/\" + flow.get('$parent.BattNumber') + \"/balance\";\nmsg.payload = msg.jkbms.status.balancingEnabled;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 810,
+        "y": 760,
+        "wires": [
+            [
+                "46d7fe3022c6beb7"
+            ]
+        ]
+    },
+    {
+        "id": "95038766925ca4c9",
+        "type": "change",
+        "z": "591fdc7180ba6486",
+        "name": "stderr",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "error",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 790,
+        "y": 800,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "7c463b9e26f9dcf1",
+        "type": "serial-port",
+        "z": "591fdc7180ba6486",
+        "serialport": "$(serport)",
+        "serialbaud": "115200",
+        "databits": "8",
+        "parity": "none",
+        "stopbits": "1",
+        "waitfor": "",
+        "dtr": "none",
+        "rts": "none",
+        "cts": "none",
+        "dsr": "none",
+        "newline": "500",
+        "bin": "bin",
+        "out": "time",
+        "addchar": "",
+        "responsetimeout": "10"
+    },
+    {
+        "id": "29584191.2aa8de",
+        "type": "mqtt-broker",
+        "name": "MQTT Server",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "compatmode": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "sessionExpiry": ""
+    },
+    {
+        "id": "2c8c1e7bf6d64dde",
+        "type": "subflow:591fdc7180ba6486",
+        "z": "f224f5d44bfa0b10",
+        "g": "ef770c89c5ab08b5",
+        "name": "",
+        "x": 570,
+        "y": 740,
+        "wires": [
+            [
+                "cc1a87bf9df59c1d"
+            ]
+        ]
+    }
+]
