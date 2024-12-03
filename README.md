@@ -1,6 +1,6 @@
 # jkbms
 JK BMS.json:
-    it is the NodeRed subflow to retrieve B2A8S20P JK BMS values
+    it is the NodeRed subflow to retrieve B2A8S20P JK BMS values.
     This is a NodeRed subflow that I have succesfully used with the B2A8S20P JK BMS for my personal use.
     It retrieves the relevant BMS values and publishes them on MQTT.
 
