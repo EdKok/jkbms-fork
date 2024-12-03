@@ -1,0 +1,385 @@
+[
+    {
+        "id": "25409ed227b4d70c",
+        "type": "subflow",
+        "name": "Fets Toggles",
+        "info": "Subflow that manages the JK BMS fets switches",
+        "category": "",
+        "in": [
+            {
+                "x": 40,
+                "y": 160,
+                "wires": [
+                    {
+                        "id": "ee918b2add80155a"
+                    },
+                    {
+                        "id": "bcee175ca62e5031"
+                    }
+                ]
+            }
+        ],
+        "out": [
+            {
+                "x": 920,
+                "y": 160,
+                "wires": [
+                    {
+                        "id": "c37fd963846e6cc8",
+                        "port": 0
+                    }
+                ]
+            }
+        ],
+        "env": [],
+        "meta": {},
+        "color": "#FFCC66",
+        "status": {
+            "x": 200,
+            "y": 40,
+            "wires": [
+                {
+                    "id": "4fcd760fa8540cd8",
+                    "port": 0
+                }
+            ]
+        }
+    },
+    {
+        "id": "4fcd760fa8540cd8",
+        "type": "status",
+        "z": "25409ed227b4d70c",
+        "name": "",
+        "scope": null,
+        "x": 80,
+        "y": 40,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "b85b865e3913e95e",
+        "type": "function",
+        "z": "25409ed227b4d70c",
+        "name": "charge on",
+        "func": "msg.timeout = 10000;\nmsg.payload = Buffer.from([0x4E, 0x57, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02, 0x02, 0xab, 0x01, 0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x01, 0xd3]);\nmsg.operation = \"CHARGING ENABLED\";\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 610,
+        "y": 140,
+        "wires": [
+            [
+                "c37fd963846e6cc8"
+            ]
+        ]
+    },
+    {
+        "id": "fc9f3896e3503b62",
+        "type": "mqtt in",
+        "z": "25409ed227b4d70c",
+        "name": "ctoggle",
+        "topic": "",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "29584191.2aa8de",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 1,
+        "x": 310,
+        "y": 120,
+        "wires": [
+            [
+                "b041928ac7fcc21f"
+            ]
+        ]
+    },
+    {
+        "id": "b041928ac7fcc21f",
+        "type": "switch",
+        "z": "25409ed227b4d70c",
+        "name": "",
+        "property": "payload",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "0",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "1",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 450,
+        "y": 120,
+        "wires": [
+            [
+                "fc4b90dda77e5476"
+            ],
+            [
+                "b85b865e3913e95e"
+            ]
+        ]
+    },
+    {
+        "id": "fc4b90dda77e5476",
+        "type": "function",
+        "z": "25409ed227b4d70c",
+        "name": "charge off",
+        "func": "msg.timeout = 10000;\nmsg.payload = Buffer.from([0x4E, 0x57, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x02, 0xab, 0x00, 0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x01, 0xd3]);\nmsg.operation = \"CHARGING DISABLED\";\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 610,
+        "y": 100,
+        "wires": [
+            [
+                "c37fd963846e6cc8"
+            ]
+        ]
+    },
+    {
+        "id": "d307feafb8a52cb7",
+        "type": "mqtt in",
+        "z": "25409ed227b4d70c",
+        "name": "dtoggle",
+        "topic": "",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "29584191.2aa8de",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 1,
+        "x": 310,
+        "y": 200,
+        "wires": [
+            [
+                "4d1678fc193cca9a"
+            ]
+        ]
+    },
+    {
+        "id": "4d1678fc193cca9a",
+        "type": "switch",
+        "z": "25409ed227b4d70c",
+        "name": "",
+        "property": "payload",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "0",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "1",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 450,
+        "y": 200,
+        "wires": [
+            [
+                "b509ec099b29fa7b"
+            ],
+            [
+                "8503f8f8381e774f"
+            ]
+        ]
+    },
+    {
+        "id": "8503f8f8381e774f",
+        "type": "function",
+        "z": "25409ed227b4d70c",
+        "name": "discharge on",
+        "func": "msg.timeout = 10000;\nmsg.payload = Buffer.from([0x4E, 0x57, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x02, 0xac, 0x01, 0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x01, 0xd5]);\nmsg.operation = \"DISCHARGING ENABLED\";\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 610,
+        "y": 220,
+        "wires": [
+            [
+                "c37fd963846e6cc8"
+            ]
+        ]
+    },
+    {
+        "id": "b509ec099b29fa7b",
+        "type": "function",
+        "z": "25409ed227b4d70c",
+        "name": "discharge off",
+        "func": "msg.timeout = 10000;\nmsg.payload = Buffer.from([0x4E, 0x57, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03, 0x02, 0xac, 0x00, 0x00, 0x00, 0x00, 0x00, 0x68, 0x00, 0x00, 0x01, 0xd4]);\nmsg.operation = \"DISCHARGING DISABLED\";\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 610,
+        "y": 180,
+        "wires": [
+            [
+                "c37fd963846e6cc8"
+            ]
+        ]
+    },
+    {
+        "id": "c37fd963846e6cc8",
+        "type": "serial request",
+        "z": "25409ed227b4d70c",
+        "name": "JK BMS",
+        "serial": "a810caec6015b20d",
+        "x": 800,
+        "y": 160,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "ee918b2add80155a",
+        "type": "change",
+        "z": "25409ed227b4d70c",
+        "name": "subscribe",
+        "rules": [
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "\"batteries/\" & $flowContext('$parent.BattNumber') & \"/ctoggle\"",
+                "tot": "jsonata"
+            },
+            {
+                "t": "set",
+                "p": "action",
+                "pt": "msg",
+                "to": "subscribe",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 160,
+        "y": 120,
+        "wires": [
+            [
+                "fc9f3896e3503b62"
+            ]
+        ]
+    },
+    {
+        "id": "bcee175ca62e5031",
+        "type": "change",
+        "z": "25409ed227b4d70c",
+        "name": "subscribe",
+        "rules": [
+            {
+                "t": "set",
+                "p": "topic",
+                "pt": "msg",
+                "to": "\"batteries/\" & $flowContext('$parent.BattNumber') & \"/dtoggle\"",
+                "tot": "jsonata"
+            },
+            {
+                "t": "set",
+                "p": "action",
+                "pt": "msg",
+                "to": "subscribe",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 160,
+        "y": 200,
+        "wires": [
+            [
+                "d307feafb8a52cb7"
+            ]
+        ]
+    },
+    {
+        "id": "a810caec6015b20d",
+        "type": "serial-port",
+        "z": "25409ed227b4d70c",
+        "serialport": "$(serport)",
+        "serialbaud": "115200",
+        "databits": "8",
+        "parity": "none",
+        "stopbits": "1",
+        "waitfor": "",
+        "dtr": "none",
+        "rts": "none",
+        "cts": "none",
+        "dsr": "none",
+        "newline": "500",
+        "bin": "bin",
+        "out": "time",
+        "addchar": "",
+        "responsetimeout": "10000"
+    },
+    {
+        "id": "29584191.2aa8de",
+        "type": "mqtt-broker",
+        "name": "MQTT Server",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "compatmode": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "sessionExpiry": ""
+    },
+    {
+        "id": "06082cb9522407e7",
+        "type": "subflow:25409ed227b4d70c",
+        "z": "f224f5d44bfa0b10",
+        "g": "5c9f25664e0e9f75",
+        "name": "",
+        "x": 210,
+        "y": 1100,
+        "wires": [
+            [
+                "d94a58c8c43147e5"
+            ]
+        ]
+    }
+]
